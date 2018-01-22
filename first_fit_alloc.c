@@ -7,6 +7,7 @@
  Code from http://arjunsreedharan.org/post/148675821737/write-a-simple-memory-allocator
 ************************/
 
+size_t MIN_BLOCK_SIZE = sizeof(int);
 
 struct header_t {
     size_t size;
@@ -19,14 +20,32 @@ struct header_t *head, *tail;
 
 pthread_mutex_t global_malloc_lock;
 
+
+// Changing from the basic given in the tutorial to
+// a first fit allocator that can breaks up large blocks
 struct header_t *get_free_block(size_t size)
 {
+    // This is first fit
     struct header_t *curr = head;
 
     while (curr)
     {
         if (curr->is_free && curr->size >= size)
         {
+            // Maybe break this block up 
+            if ((curr->size - size) >  (sizeof(struct header_t) + MIN_BLOCK_SIZE))
+            {
+                // create new block
+                // attach the new sub-block into the linked list
+                // change size of current block
+                new_header = (struct header_t*)(curr + size);
+                new_header->size = curr->size - size - sizeof(struct header_t);
+                new_header->is_free = 1;
+                new_header->next = curr->next;
+                curr->next = new_header;
+                curr->size = size;
+                
+            }
             return curr;
         }
 
@@ -153,60 +172,6 @@ void my_free(void *block)
 }
 
 
-void *my_calloc(size_t num, size_t nsize)
-{
-    size_t size;
-    void *block;
-    if (!num || !nsize)
-    {
-        return NULL;
-    }
-
-    size = num * nsize;
-
-    // check for mul overflow
-    if (nsize != size / num)
-    {
-        return NULL;
-    }
-
-    block = my_malloc(size);
-    if (!block)
-    {
-        return NULL;
-    }
-
-    // Zeroing out the memory
-    memset(block, 0, size);
-    return block;
-}
-
-
-void *realloc(void *block, size_t size)
-{
-    struct header_t *header;
-    void *ret;
-    if (!block || !size)
-    {
-        return my_malloc(size);
-    }
-
-    header = (struct header_t*)block - 1;
-    if (header->size >= size)
-    {
-        return block;
-    }
-
-    ret = my_malloc(size);
-    if (ret)
-    {
-        memcpy(ret, block, header->size);
-        my_free(block);
-    }
-    return ret;
-}
-
-
 int main(int argc, char *argv[])
 {
 
@@ -217,7 +182,7 @@ int main(int argc, char *argv[])
         return (-1);
     }
 
-    for(int i=0; i < 10; i++)
+    for(int i; i < 10; i++)
     {
         array[i] = i;
         printf("%d is at %p\n", array[i], &array[i]);
